@@ -283,7 +283,7 @@ impl PositionMonitor {
                             let position_account = position.position_account;
                             seen_positions.insert(position_account, true);
 
-
+                            
                             // Check if already exists
                             if self.get_position(position_account).await.is_some() {
                                 self.update_position(position).await?;

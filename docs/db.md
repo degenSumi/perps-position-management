@@ -2,9 +2,9 @@
 
 ## Architecture Overview
 
-The database layer stores all position data (current and historical) for efficient querying and analytics. Position updates are streamed via gRPC, pushed to Kafka topics, and inserted into PostgreSQL in real-time through MSK connectors. Haven't implemented the db layer due to some time constraints, but would be pretty straight forward.
+The database layer stores all position data (current and historical) for efficient querying and analytics. Position updates are streamed via gRPC, pushed to Kafka topics, and inserted into PostgreSQL in real-time through MSK connectors.
 
-Single table design storing all position states (current + historical). Each update creates a new row with higher `slot` and `timestamp`. The highest slot for a position represents the current state, while all rows provide complete audit trail.
+Each position update creates a new row with higher `slot` and `timestamp`. The highest slot for a position represents the current state, while all rows provide complete audit trail.
 Position updates streamed via
 
 gRPC → Kafka → PostgreSQL via MSK connectors.

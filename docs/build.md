@@ -8,6 +8,7 @@ Complete guide for building and deploying the Solana smart contracts and Rust ba
 
 1. [Prerequisites](#prerequisites)
 2. [Smart Contract Deployment](#smart-contract-deployment)
+- **devnet deployment** https://solscan.io/account/9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3?cluster=devnet
 3. [Backend Setup](#backend-setup)
 7. [Monitoring & Maintenance](#monitoring--maintenance)
 
@@ -53,14 +54,14 @@ avm use latest
 ### **1. Clone Repository**
 
 ```bash
-git clone <your-repo-url>
-cd perpetual-futures
+git clone git@github.com:degenSumi/perps-position-management.git
+cd perps-position-management
 ```
 
 ### **2. Navigate to Contract Directory**
 
 ```bash
-cd programs/perpetual-futures
+cd position-management-system
 ```
 
 ### **3. Configure Solana CLI**
@@ -96,8 +97,8 @@ anchor build
 ```
 
 This generates:
-- Program binary: `target/deploy/perpetual_futures.so`
-- IDL: `target/idl/perpetual_futures.json`
+- Program binary: `target/deploy/position_management_system.so`
+- IDL: `target/idl/position_management_system.json`
 
 ### **7. Get Program ID**
 
@@ -107,7 +108,7 @@ anchor keys list
 
 Copy the program ID and update it in:
 - `Anchor.toml`
-- `programs/perpetual-futures/src/lib.rs` (at `declare_id!`)
+- `programs/position_management_system/src/lib.rs` (at `declare_id!`)
 
 ### **8. Rebuild After Program ID Update**
 
@@ -124,7 +125,7 @@ anchor deploy
 ### **10. Verify Deployment**
 
 ```bash
-solana program show <PROGRAM_ID>
+solana program show 
 ```
 
 ### **12. Run Tests**
@@ -151,22 +152,18 @@ Or use the dev env
 ```bash
 # Solana Configuration
 SOLANA_RPC_URL=https://api.devnet.solana.com
-PROGRAM_ID=<YOUR_PROGRAM_ID>
-WALLET_PRIVATE_KEY=<BASE58_PRIVATE_KEY>
+PROGRAM_ID=9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3
+SOLANA_PRIVATE_KEY=<BASE58_PRIVATE_KEY> # imp used for all the transactions
 
 # Redis Configuration
 REDIS_URL=redis://localhost:6379
 
 # Server Configuration
-HOST=0.0.0.0
 PORT=3000
 
-# Oracle Configuration (Pyth/Hermes)
-ORACLE_PROVIDER=hermes
-ORACLE_MAINNET=true
 
 # Monitoring
-LOG_LEVEL=info
+RUST_LOG=info
 ```
 
 ### **3. Install Dependencies**

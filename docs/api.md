@@ -18,7 +18,7 @@ Base URL: `http://localhost:3000` (development)
 
 ## **Authentication**
 
-Currently, authentication is handled via Solana wallet signatures. All transactions require the user's keypair to sign on-chain operations.
+Currently, authentication is handled via Solana wallet signatures. All transactions require the user's keypair to sign on-chain operations. (A private is configured in the env that is used for all the transactions).
 
 ***
 
@@ -668,7 +668,7 @@ Currently no rate limiting is enforced. Production deployments should implement 
 
 ### **Decimal Precision**
 
-- **Prices (USDT)**: 6 decimal places
+- **Prices (USD)**: 6 decimal places
 - **Sizes (BTC/ETH)**: 8 decimal places
 - **PnL**: 6 decimal places
 

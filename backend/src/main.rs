@@ -52,6 +52,10 @@ async fn main() -> Result<()> {
     info!("  Port: {}", port);
 
     // Initialize Solana payer keypair from private key
+    // Using a single account from ENV for all signing/accounts creation
+    // Can use ephermal wallets per user after having an auth layer
+    // Or use self custodial wallets and let users sign on client side
+    // For the sake of demonstration have used a single wallet added to env for all things
     let payer: Arc<Keypair> = Arc::new(Keypair::from_base58_string(&private_key));
     info!("  Payer: {}", payer.pubkey());
     

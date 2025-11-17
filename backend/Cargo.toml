@@ -1,0 +1,50 @@
+[package]
+name = "perpetual-backend"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Solana
+anchor-client = "0.30.1"
+solana-client = "1.18"
+solana-sdk = "1.18"
+solana-account-decoder = "1.18"
+
+# Web framework
+axum = { version = "0.7", features = ["ws"] }
+tokio = { version = "1", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Decimal arithmetic
+rust_decimal = { version = "1.33", features = ["serde-with-str"] }
+borsh = "0.10"
+anchor-lang = "0.30.1"
+pyth-sdk-solana = "0.10.6"
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false}
+
+# WebSocket for price feeds
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+
+# Redis
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager", "aio"] }
+
+# Futures for async streams
+futures = "0.3"
+
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+
+dotenvy = "0.15"
+
+[dev-dependencies]
+rust_decimal_macros = "1.39.0"

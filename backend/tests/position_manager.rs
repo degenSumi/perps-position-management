@@ -1,14 +1,14 @@
-use perpetual_backend::services::{MonitorConfig, PositionMonitor, PositionManager};
-use perpetual_backend::infrastructure::{OracleClient, SolanaClient};
-use perpetual_backend::domain::Side;
 use anyhow::Result;
+use perpetual_backend::domain::Side;
+use perpetual_backend::infrastructure::{OracleClient, SolanaClient};
+use perpetual_backend::services::{MonitorConfig, PositionManager, PositionMonitor};
 use rust_decimal_macros::dec;
-use solana_sdk::{signature::Keypair, pubkey::Pubkey};
-use tokio::sync::RwLock;
-use std::sync::Arc;
-use tracing::info;
-use std::str::FromStr;
 use solana_sdk::signer::Signer;
+use solana_sdk::{pubkey::Pubkey, signature::Keypair};
+use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::info;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_open_position_on_chain() -> Result<()> {
@@ -21,22 +21,21 @@ async fn test_open_position_on_chain() -> Result<()> {
 
     info!("Starting Position Manager Integration Test");
 
-        let program_id = Pubkey::from_str("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3")?;
+    let program_id = Pubkey::from_str("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3")?;
     let rpc_url = "https://api.devnet.solana.com".to_string();
 
-    let private_key = std::env::var("SOLANA_PRIVATE_KEY")
-        .expect("SOLANA_PRIVATE_KEY not set in .env");
+    let private_key =
+        std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not set in .env");
     let payer: Arc<Keypair> = Arc::new(Keypair::from_base58_string(&private_key));
 
     info!("Test Wallet: {}", payer.pubkey());
-    info!("WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet", payer.pubkey());
+    info!(
+        "WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet",
+        payer.pubkey()
+    );
     info!("");
 
-    let solana_client = Arc::new(SolanaClient::new(
-        program_id,
-        Arc::clone(&payer),
-        rpc_url,
-    ));
+    let solana_client = Arc::new(SolanaClient::new(program_id, Arc::clone(&payer), rpc_url));
 
     // Initialize Oracle client
     let oracle_client = Arc::new(RwLock::new(
@@ -44,24 +43,20 @@ async fn test_open_position_on_chain() -> Result<()> {
     ));
     info!("Oracle client initialized");
 
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
 
     // Initialize Position Monitor
-    let monitor: Arc<PositionMonitor> = Arc::new(
-        PositionMonitor::new(
-            Arc::clone(&solana_client),
-            oracle_client,
-            MonitorConfig::default(),
-            redis_url,
-        )?
-    );
+    let monitor: Arc<PositionMonitor> = Arc::new(PositionMonitor::new(
+        Arc::clone(&solana_client),
+        oracle_client,
+        MonitorConfig::default(),
+        redis_url,
+    )?);
     info!("Position monitor created");
 
     // Create position manager
-    let manager = PositionManager::new(Arc::clone(&solana_client),Arc::clone(&monitor));
-    
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    let manager = PositionManager::new(Arc::clone(&solana_client), Arc::clone(&monitor));
 
     // Step 1: Initialize user account (only needs to be done once)
     info!("Initializing user account...");
@@ -79,24 +74,27 @@ async fn test_open_position_on_chain() -> Result<()> {
 
     info!("\nStep 2: Add Collateral");
     let collateral_amount = 1_000_000 * 1_000_000; // 1,000,000 USDT
-    let sig = manager.add_collateral(&payer.pubkey(), collateral_amount).await?;
+    let sig = manager
+        .add_collateral(&payer.pubkey(), collateral_amount)
+        .await?;
     info!("Collateral added: {}", sig);
 
     // Wait a bit for confirmation
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // Step 2: Open a position
     info!("Opening BTC Long position...");
-    
-    let (position, signature) = manager.open_position(
-        payer.pubkey(),
-        "BTC-USD".to_string(),
-        Side::Long,
-        dec!(0.1),          // 0.1 BTC
-        10,                 // 10x leverage
-        dec!(98000),        // Entry price $98,000
-        dec!(0.025),        // 2.5% maintenance margin
-    ).await?;
+
+    let (position, signature) = manager
+        .open_position(
+            payer.pubkey(),
+            "BTC-USD".to_string(),
+            Side::Long,
+            dec!(0.1),   // 0.1 BTC
+            10,          // 10x leverage
+            dec!(98000), // Entry price $98,000
+            dec!(0.025), // 2.5% maintenance margin
+        )
+        .await?;
 
     info!("Position opened!");
     info!("   Transaction: {}", signature);
@@ -148,22 +146,21 @@ async fn test_modify_position_on_chain() -> Result<()> {
 
     info!("Testing Position Modification");
 
-       let program_id = Pubkey::from_str("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3")?;
+    let program_id = Pubkey::from_str("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3")?;
     let rpc_url = "https://api.devnet.solana.com".to_string();
 
-    let private_key = std::env::var("SOLANA_PRIVATE_KEY")
-        .expect("SOLANA_PRIVATE_KEY not set in .env");
+    let private_key =
+        std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not set in .env");
     let payer: Arc<Keypair> = Arc::new(Keypair::from_base58_string(&private_key));
 
     info!("Test Wallet: {}", payer.pubkey());
-    info!("WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet", payer.pubkey());
+    info!(
+        "WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet",
+        payer.pubkey()
+    );
     info!("");
 
-    let solana_client = Arc::new(SolanaClient::new(
-        program_id,
-        Arc::clone(&payer),
-        rpc_url,
-    ));
+    let solana_client = Arc::new(SolanaClient::new(program_id, Arc::clone(&payer), rpc_url));
 
     // Initialize Oracle client
     let oracle_client = Arc::new(RwLock::new(
@@ -171,49 +168,46 @@ async fn test_modify_position_on_chain() -> Result<()> {
     ));
     info!("Oracle client initialized");
 
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
 
     // Initialize Position Monitor
-    let monitor: Arc<PositionMonitor> = Arc::new(
-        PositionMonitor::new(
-            Arc::clone(&solana_client),
-            oracle_client,
-            MonitorConfig::default(),
-            redis_url,
-        )?
-    );
+    let monitor: Arc<PositionMonitor> = Arc::new(PositionMonitor::new(
+        Arc::clone(&solana_client),
+        oracle_client,
+        MonitorConfig::default(),
+        redis_url,
+    )?);
     info!("Position monitor created");
 
     // Create position manager
-    let manager = PositionManager::new(Arc::clone(&solana_client),Arc::clone(&monitor));
-    
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
+    let manager = PositionManager::new(Arc::clone(&solana_client), Arc::clone(&monitor));
 
     // First, open a position
     info!("Opening position...");
-    let (position, _) = manager.open_position(
-        payer.pubkey(),
-        "ETH-USD".to_string(),
-        Side::Long,
-        dec!(1.0),
-        10,
-        dec!(3500),
-        dec!(0.025),
-    ).await?;
+    let (position, _) = manager
+        .open_position(
+            payer.pubkey(),
+            "ETH-USD".to_string(),
+            Side::Long,
+            dec!(1.0),
+            10,
+            dec!(3500),
+            dec!(0.025),
+        )
+        .await?;
 
     info!("Position opened: {}", position.position_account);
 
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-
     // Now modify it
     info!("Modifying position size...");
-    let signature = manager.modify_position(
-        position.position_account,
-        Some(dec!(2.0)),    // Double the size to 2.0 ETH
-        None,               // No margin change
-    ).await?;
+    let signature = manager
+        .modify_position(
+            position.position_account,
+            Some(dec!(2.0)), // Double the size to 2.0 ETH
+            None,            // No margin change
+        )
+        .await?;
 
     info!("Position modified: {}", signature);
 
@@ -235,19 +229,18 @@ async fn test_close_position_on_chain() -> Result<()> {
     let program_id = Pubkey::from_str("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3")?;
     let rpc_url = "https://api.devnet.solana.com".to_string();
 
-    let private_key = std::env::var("SOLANA_PRIVATE_KEY")
-        .expect("SOLANA_PRIVATE_KEY not set in .env");
+    let private_key =
+        std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not set in .env");
     let payer: Arc<Keypair> = Arc::new(Keypair::from_base58_string(&private_key));
 
     info!("Test Wallet: {}", payer.pubkey());
-    info!("WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet", payer.pubkey());
+    info!(
+        "WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet",
+        payer.pubkey()
+    );
     info!("");
 
-    let solana_client = Arc::new(SolanaClient::new(
-        program_id,
-        Arc::clone(&payer),
-        rpc_url,
-    ));
+    let solana_client = Arc::new(SolanaClient::new(program_id, Arc::clone(&payer), rpc_url));
 
     // Initialize Oracle client
     let oracle_client = Arc::new(RwLock::new(
@@ -255,47 +248,43 @@ async fn test_close_position_on_chain() -> Result<()> {
     ));
     info!("Oracle client initialized");
 
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
 
     // Initialize Position Monitor
-    let monitor: Arc<PositionMonitor> = Arc::new(
-        PositionMonitor::new(
-            Arc::clone(&solana_client),
-            oracle_client,
-            MonitorConfig::default(),
-            redis_url,
-        )?
-    );
+    let monitor: Arc<PositionMonitor> = Arc::new(PositionMonitor::new(
+        Arc::clone(&solana_client),
+        oracle_client,
+        MonitorConfig::default(),
+        redis_url,
+    )?);
     info!("Position monitor created");
 
     // Create position manager
-    let manager = PositionManager::new(Arc::clone(&solana_client),Arc::clone(&monitor));
-    
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    let manager = PositionManager::new(Arc::clone(&solana_client), Arc::clone(&monitor));
+
     // Open a position
     info!("Opening position...");
-    let (position, _) = manager.open_position(
-        payer.pubkey(),
-        "SOL-USD".to_string(),
-        Side::Short,
-        dec!(10.0),
-        5,
-        dec!(240),
-        dec!(0.025),
-    ).await?;
+    let (position, _) = manager
+        .open_position(
+            payer.pubkey(),
+            "SOL-USD".to_string(),
+            Side::Short,
+            dec!(10.0),
+            5,
+            dec!(240),
+            dec!(0.025),
+        )
+        .await?;
 
     info!("Position opened: {}", position.position_account);
-
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // Close the position at a different price (simulating profit)
     info!("Closing position...");
     let close_price = dec!(230); // Price dropped, short profits
-    let (pnl, signature) = manager.close_position(
-        position.position_account,
-        close_price,
-    ).await?;
+    let (pnl, signature) = manager
+        .close_position(position.position_account, close_price)
+        .await?;
 
     info!("Position closed: {}", signature);
     info!("Realized PnL: ${}", pnl);
@@ -319,19 +308,18 @@ async fn test_full_position_lifecycle() -> Result<()> {
     let program_id = Pubkey::from_str("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3")?;
     let rpc_url = "https://api.devnet.solana.com".to_string();
 
-    let private_key = std::env::var("SOLANA_PRIVATE_KEY")
-        .expect("SOLANA_PRIVATE_KEY not set in .env");
+    let private_key =
+        std::env::var("SOLANA_PRIVATE_KEY").expect("SOLANA_PRIVATE_KEY not set in .env");
     let payer: Arc<Keypair> = Arc::new(Keypair::from_base58_string(&private_key));
 
     info!("Test Wallet: {}", payer.pubkey());
-    info!("WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet", payer.pubkey());
+    info!(
+        "WARNING: Ensure wallet has SOL: solana airdrop 2 {} --url devnet",
+        payer.pubkey()
+    );
     info!("");
 
-    let solana_client = Arc::new(SolanaClient::new(
-        program_id,
-        Arc::clone(&payer),
-        rpc_url,
-    ));
+    let solana_client = Arc::new(SolanaClient::new(program_id, Arc::clone(&payer), rpc_url));
 
     // Initialize Oracle client
     let oracle_client = Arc::new(RwLock::new(
@@ -339,79 +327,81 @@ async fn test_full_position_lifecycle() -> Result<()> {
     ));
     info!("Oracle client initialized");
 
-    let redis_url = std::env::var("REDIS_URL")
-        .unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
 
     // Initialize Position Monitor
-    let monitor: Arc<PositionMonitor> = Arc::new(
-        PositionMonitor::new(
-            Arc::clone(&solana_client),
-            oracle_client,
-            MonitorConfig::default(),
-            redis_url,
-        )?
-    );
+    let monitor: Arc<PositionMonitor> = Arc::new(PositionMonitor::new(
+        Arc::clone(&solana_client),
+        oracle_client,
+        MonitorConfig::default(),
+        redis_url,
+    )?);
     info!("Position monitor created");
 
     // Create position manager
-    let manager = PositionManager::new(Arc::clone(&solana_client),Arc::clone(&monitor));
-    
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    let manager = PositionManager::new(Arc::clone(&solana_client), Arc::clone(&monitor));
 
-     // Step 1: Initialize user account (only needs to be done once)
+    // Step 1: Initialize user account (only needs to be done once)
     info!("Initializing user account...");
-    
 
-    match manager.initialize_user(&payer.pubkey()).await {
-        Ok(sig) => info!("User initialized: {}", sig),
-        Err(e) => {
-            if e.to_string().contains("already in use") {
-                info!("User account already initialized");
-            } else {
-                info!("Failed to initialize user: {}", e);
-            }
-        }
-    }
+    // match manager.initialize_user(&payer.pubkey()).await {
+    //     Ok(sig) => info!("User initialized: {}", sig),
+    //     Err(e) => {
+    //         if e.to_string().contains("already in use") {
+    //             info!("User account already initialized");
+    //         } else {
+    //             info!("Failed to initialize user: {}", e);
+    //         }
+    //     }
+    // }
 
     // Wait a bit for confirmation
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    // tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     info!("\nStep 2: Add Collateral");
     let collateral_amount = 1_000_000 * 1_000_000; // 1,000,000 USDT
-    let sig = manager.add_collateral(&payer.pubkey(), collateral_amount).await?;
+    let sig = manager
+        .add_collateral(&payer.pubkey(), collateral_amount)
+        .await?;
     info!("Collateral added: {}", sig);
 
     // 2. Open position
     info!("Step 2: Opening BTC Long position...");
-    let (position, sig) = manager.open_position(
-        payer.pubkey(),
-        "BTC-USD".to_string(),
-        Side::Long,
-        dec!(1),
-        10,
-        dec!(50000),
-        dec!(0.0025),
-    ).await?;
+    let (position, sig) = manager
+        .open_position(
+            payer.pubkey(),
+            "BTC-USD".to_string(),
+            Side::Long,
+            dec!(1),
+            10,
+            dec!(50000),
+            dec!(0.0025),
+        )
+        .await?;
 
     info!("   Opened: {} (tx: {})", position.position_account, sig);
-    info!("   Margin: ${}, Liq Price: ${}", position.margin, position.liquidation_price);
-
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+    info!(
+        "   Margin: ${}, Liq Price: ${}",
+        position.margin, position.liquidation_price
+    );
 
     // 3. Modify position
     info!("Step 3: Increasing position size...");
-    let sig = manager.modify_position(
-        position.position_account,
-        Some(dec!(0.1)), // Increase to 0.1 BTC
-        None,
-    ).await?;
+    let sig = manager
+        .modify_position(
+            position.position_account,
+            Some(dec!(0.1)), // Increase to 0.1 BTC
+            None,
+        )
+        .await?;
     info!("   Modified: {}", sig);
-
-    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
 
     // 4. Close position
     info!("Step 5: Closing position...");
-    let (pnl, sig) = manager.close_position(position.position_account, dec!(99000)).await?;
+    let (pnl, sig) = manager
+        .close_position(position.position_account, dec!(99000))
+        .await?;
     info!("   Closed: {}", sig);
     info!("   Final PnL: ${}", pnl);
 

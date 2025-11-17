@@ -321,7 +321,3 @@ pub async fn close_position(
         message: "Position closed successfully".to_string(),
     }))
 }
-
-
-
-

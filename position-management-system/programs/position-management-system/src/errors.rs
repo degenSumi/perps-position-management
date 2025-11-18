@@ -34,4 +34,13 @@ pub enum PositionError {
     
     #[msg("Unauthorized")]
     Unauthorized,
+
+    #[msg("Invalid or stale oracle price")]
+    InvalidPrice,
+    
+    #[msg("Price slippage exceeded maximum")]
+    SlippageExceeded,
+    
+    #[msg("Invalid slippage parameter")]
+    InvalidSlippage,
 }

@@ -225,3 +225,9 @@ cargo build --release
 ***
 
 **End of Deployment Guide**
+
+### **Other documentations and API Spec**
+
+- [API Specification](/docs/api.md)
+- [Build ](/docs/build.md)
+- [db ](/docs/db.md)

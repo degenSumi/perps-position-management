@@ -1,4 +1,5 @@
 <!-- High level architecture diagram -->
+# **Architecture**
 ![High Level Architecture (Perpetual Futures Platform)](/docs/perps-architecture.png)
 
 # **Build & Deployment Guide - Perpetual Futures Platform**

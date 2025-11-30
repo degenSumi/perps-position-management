@@ -1,3 +1,6 @@
+<!-- High level architecture diagram -->
+![High Level Architecture (Perpetual Futures Platform)](/docs/perps-architecture.png)
+
 # **Build & Deployment Guide - Perpetual Futures Platform**
 
 Complete guide for building and deploying the Solana smart contracts and Rust backend.

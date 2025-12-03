@@ -56,7 +56,7 @@ impl Default for MonitorConfig {
         Self {
             pnl_update_interval_ms: 2000,
             position_refresh_interval_ms: 2000,
-            maintenance_margin_ratio: Decimal::from_str_exact("0.025").unwrap(),
+            maintenance_margin_ratio: Decimal::from_str_exact("0.025").unwrap_or_default(),
         }
     }
 }

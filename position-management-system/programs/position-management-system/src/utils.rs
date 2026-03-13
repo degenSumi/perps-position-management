@@ -2,6 +2,113 @@ use anchor_lang::prelude::*;
 use crate::constants::{PRICE_PRECISION, SUPPORTED_ASSET_DECIMALS, get_leverage_tier};
 use crate::state::Side;
 use crate::errors::PositionError;
+use pyth_solana_receiver_sdk::price_update::Price;
+
+/// Maximum age of price data in seconds
+pub const MAXIMUM_AGE: u64 = 1;
+
+/// Pyth price feed IDs for different symbols
+pub fn get_price_feed_id(symbol: &str) -> Result<String> {
+    match symbol {
+        "BTC-USD" => Ok("e62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43".to_string()),
+        "ETH-USD" => Ok("ff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace".to_string()),
+        "SOL-USD" => Ok("ef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d".to_string()),
+        _ => Err(error!(PositionError::InvalidSymbol)),
+    }
+}
+
+/// Convert Pyth price to u64 with 6 decimals
+pub fn convert_pyth_price_to_u64(price: &Price) -> Result<u64> {
+    // Pyth price has expo (usually -8 for crypto)
+    // We want 6 decimals, so adjust accordingly
+    let price_i64 = price.price;
+    let expo = price.exponent;
+    
+    // Convert to 6 decimals
+    // If expo is -8, multiply by 100 to get to -6
+    // If expo is -6, keep as is
+    let adjusted_price = if expo < -6 {
+        let adjustment = 10i64.pow((-6 - expo) as u32);
+        price_i64 / adjustment
+    } else if expo > -6 {
+        let adjustment = 10i64.pow((expo + 6) as u32);
+        price_i64 * adjustment
+    } else {
+        price_i64
+    };
+
+    require!(adjusted_price > 0, PositionError::InvalidPrice);
+    
+    Ok(adjusted_price as u64)
+}
+
+
+/// Validate slippage between expected price and actual oracle price
+pub fn validate_slippage(
+    expected_price: u64,
+    actual_price: u64,
+    max_slippage_bps: u16,
+    side: Side,
+) -> Result<()> {
+    // Calculate price difference
+    let price_diff = if actual_price > expected_price {
+        actual_price - expected_price
+    } else {
+        expected_price - actual_price
+    };
+
+    // Calculate slippage in basis points (1 bps = 0.01%)
+    let slippage_bps = (price_diff as u128)
+        .checked_mul(10000)
+        .ok_or(error!(PositionError::ArithmeticOverflow))?
+        .checked_div(expected_price as u128)
+        .ok_or(error!(PositionError::ArithmeticOverflow))? as u16;
+
+    msg!("Slippage check: expected={}, actual={}, slippage={}bps, max={}bps", 
+        expected_price, actual_price, slippage_bps, max_slippage_bps);
+
+    // Check if slippage exceeds maximum
+    require!(
+        slippage_bps <= max_slippage_bps,
+        PositionError::SlippageExceeded
+    );
+
+    // Additional check: ensure price moved in unfavorable direction doesn't exceed limit
+    match side {
+        Side::Long => {
+            // For longs, unfavorable if actual > expected (buying at higher price)
+            if actual_price > expected_price {
+                let unfavorable_slippage = ((actual_price - expected_price) as u128)
+                    .checked_mul(10000)
+                    .ok_or(error!(PositionError::ArithmeticOverflow))?
+                    .checked_div(expected_price as u128)
+                    .ok_or(error!(PositionError::ArithmeticOverflow))? as u16;
+                
+                require!(
+                    unfavorable_slippage <= max_slippage_bps,
+                    PositionError::SlippageExceeded
+                );
+            }
+        }
+        Side::Short => {
+            // For shorts, unfavorable if actual < expected (selling at lower price)
+            if actual_price < expected_price {
+                let unfavorable_slippage = ((expected_price - actual_price) as u128)
+                    .checked_mul(10000)
+                    .ok_or(error!(PositionError::ArithmeticOverflow))?
+                    .checked_div(expected_price as u128)
+                    .ok_or(error!(PositionError::ArithmeticOverflow))? as u16;
+                
+                require!(
+                    unfavorable_slippage <= max_slippage_bps,
+                    PositionError::SlippageExceeded
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
 
 /// Calculate Initial Margin
 /// Formula: Initial Margin = (Position Size × Entry Price) / Leverage

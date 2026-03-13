@@ -53,17 +53,23 @@ async fn websocket_handler(socket: WebSocket, state: AppState) {
     let subscribed_symbols: Arc<RwLock<HashSet<String>>> = Arc::new(RwLock::new(HashSet::new()));
 
     // Send welcome message
+    let welcome_msg = WsMessage::Connected {
+        message: "Connected to Perpetual Futures Backend".to_string(),
+    };
+
+    let json_text = match serde_json::to_string(&welcome_msg) {
+        Ok(text) => text,
+        Err(e) => {
+            error!("Failed to serialize welcome message: {e}");
+            return; // or handle differently
+        }
+    };
+
+    // Send welcome message
     {
-        let mut sender_lock = sender.lock().await;
-        if let Err(e) = sender_lock.send(Message::Text(
-            serde_json::to_string(&WsMessage::Connected {
-                message: "Connected to Perpetual Futures Backend".to_string(),
-            })
-            .unwrap(),
-        ))
-        .await
-        {
-            error!("Failed to send welcome message: {}", e);
+        let mut sender_lock = sender.lock().await;  
+         if let Err(_) = sender_lock.send(Message::Text(json_text)).await {
+            error!("Client disconnected before welcome message could be sent");
             return;
         }
     }
@@ -93,7 +99,7 @@ async fn websocket_handler(socket: WebSocket, state: AppState) {
                         };
                         let mut sender_lock = recv_sender.lock().await;
                         if let Err(e) =
-                            sender_lock.send(Message::Text(serde_json::to_string(&error_msg).unwrap())).await
+                            sender_lock.send(Message::Text(serde_json::to_string(&error_msg).unwrap_or_default())).await
                         {
                             error!("Failed to send error message: {}", e);
                             break;
@@ -123,7 +129,7 @@ async fn websocket_handler(socket: WebSocket, state: AppState) {
                         };
                         let msg = WsMessage::PriceUpdate(dto);
                         let mut sender_lock = send_sender.lock().await;
-                        if let Err(e) = sender_lock.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
+                        if let Err(e) = sender_lock.send(Message::Text(serde_json::to_string(&msg).unwrap_or_default())).await {
                             warn!("Failed to send price update: {}", e);
                             break;
                         }
@@ -145,7 +151,7 @@ async fn websocket_handler(socket: WebSocket, state: AppState) {
                         };
                         let msg = WsMessage::PositionUpdate(dto);
                         let mut sender_lock = send_sender.lock().await;
-                        if let Err(e) = sender_lock.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
+                        if let Err(e) = sender_lock.send(Message::Text(serde_json::to_string(&msg).unwrap_or_default())).await {
                             warn!("Failed to send position update: {}", e);
                             break;
                         }
@@ -164,7 +170,7 @@ async fn websocket_handler(socket: WebSocket, state: AppState) {
                         };
                         let msg = WsMessage::LiquidationAlert(dto);
                         let mut sender_lock = send_sender.lock().await;
-                        if let Err(e) = sender_lock.send(Message::Text(serde_json::to_string(&msg).unwrap())).await {
+                        if let Err(e) = sender_lock.send(Message::Text(serde_json::to_string(&msg).unwrap_or_default())).await {
                             warn!("Failed to send liquidation alert: {}", e);
                             break;
                         }

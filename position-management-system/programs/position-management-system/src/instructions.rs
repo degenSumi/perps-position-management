@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use pyth_solana_receiver_sdk::price_update::PriceUpdateV2;
 use crate::state::*;
 use crate::errors::PositionError;
 
@@ -20,30 +21,33 @@ pub struct InitializeUser<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(symbol: String, side: Side, size: u64, leverage: u16, expected_price: u64, maximum_slippage_bps: u16)]
 pub struct OpenPosition<'info> {
     #[account(
         init,
         payer = user,
-        space = Position::MAX_SIZE,
+        space = 8 + Position::MAX_SIZE,
         seeds = [
             b"position",
             user.key().as_ref(),
-            user_account.position_count_total.to_le_bytes().as_ref()
+            &user_account.position_count_total.to_le_bytes()
         ],
         bump
     )]
     pub position: Account<'info, Position>,
-    
+
     #[account(
         mut,
         seeds = [b"user", user.key().as_ref()],
         bump = user_account.bump
     )]
     pub user_account: Account<'info, UserAccount>,
-    
+
     #[account(mut)]
     pub user: Signer<'info>,
-    
+
+    pub price_update: Account<'info, PriceUpdateV2>,
+
     pub system_program: Program<'info, System>,
 }
 
@@ -83,6 +87,9 @@ pub struct ClosePosition<'info> {
     
     #[account(mut)]
     pub owner: Signer<'info>,
+
+    /// Pyth price update account
+    pub price_update: Account<'info, PriceUpdateV2>,
 }
 
 #[derive(Accounts)]
@@ -126,5 +133,6 @@ pub struct PositionClosed {
     pub position: Pubkey,
     pub owner: Pubkey,
     pub realized_pnl: i64,
+    pub final_price: u64,
     pub timestamp: i64,
 }

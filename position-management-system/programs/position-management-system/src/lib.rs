@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use pyth_solana_receiver_sdk::price_update::{get_feed_id_from_hex};
 
 pub mod constants;
 pub mod errors;
@@ -12,7 +13,7 @@ use instructions::*;
 use state::*;
 use utils::*;
 
-declare_id!("9bca4kbDn7uyQWQaqfKpe8hCdbBh6KqJFNbkzwHhieC3");
+declare_id!("5JfvJ18ynvBsZog4g3NgZhKSGob49CMpefhHEX9MbXLV");
 
 #[program]
 pub mod position_management_system {
@@ -26,6 +27,7 @@ pub mod position_management_system {
         user_account.locked_collateral = 0;
         user_account.total_pnl = 0;
         user_account.position_count = 0;
+        user_account.position_count_total = 0;
         user_account.bump = ctx.bumps.user_account;
 
         msg!("User account initialized for: {}", user_account.owner);
@@ -39,7 +41,8 @@ pub mod position_management_system {
         side: Side,
         size: u64,
         leverage: u16,
-        entry_price: u64,
+        expected_price: u64,       // User's expected price
+        maximum_slippage_bps: u16, // Max acceptable slippage in basis points (e.g., 50 = 0.5%)
     ) -> Result<()> {
         require!(size > 0, PositionError::InvalidPositionSize);
         require!(
@@ -50,9 +53,29 @@ pub mod position_management_system {
             symbol.len() <= MAX_SYMBOL_LENGTH,
             PositionError::InvalidSymbol
         );
+        require!(
+            maximum_slippage_bps <= 10000, // Max 100%
+            PositionError::InvalidSlippage
+        );
+
+        // Get price from Pyth oracle
+        let price_update = &ctx.accounts.price_update;
+        let price = price_update.get_price_no_older_than(
+            &Clock::get()?,
+            MAXIMUM_AGE,
+            &get_feed_id_from_hex(&get_price_feed_id(&symbol)?)?,
+        )?;
+
+        // Convert Pyth price to our format (assuming 6 decimals for USDT)
+        let entry_price = convert_pyth_price_to_u64(&price)?;
+
+        msg!("Oracle price for {}: {}", symbol, entry_price);
+
+        // Slippage protection
+        validate_slippage(expected_price, entry_price, maximum_slippage_bps, side)?;
 
         validate_leverage_and_size(leverage, size, entry_price)?;
-        
+
         let required_margin = calculate_initial_margin(size, entry_price, leverage)?;
 
         let position_value = calculate_position_value_for_tiers(size, entry_price)?;
@@ -64,14 +87,12 @@ pub mod position_management_system {
         let position_key = ctx.accounts.position.key();
         let user_key = ctx.accounts.user.key();
 
-        // Auto-increment position index
         let user_account = &mut ctx.accounts.user_account;
         user_account.position_count_total = user_account
             .position_count_total
             .checked_add(1)
             .ok_or(error!(PositionError::ArithmeticOverflow))?;
 
-        // Also update open position count
         user_account.position_count = user_account
             .position_count
             .checked_add(1)
@@ -92,9 +113,11 @@ pub mod position_management_system {
             .checked_add(required_margin)
             .ok_or(error!(PositionError::ArithmeticOverflow))?;
 
-
-        msg!("Opening position for user: {} with position key: {}", user_key, position_key);
-
+        msg!(
+            "Opening position for user: {} with position key: {}",
+            user_key,
+            position_key
+        );
 
         let position = &mut ctx.accounts.position;
         position.owner = user_key;
@@ -125,10 +148,12 @@ pub mod position_management_system {
         });
 
         msg!(
-            "Position opened: {} with {}x leverage, by {} user",
+            "Position opened: {} with {}x leverage at price {} (expected: {}, slippage: {} bps)",
             size,
             leverage,
-            user_key
+            entry_price,
+            expected_price,
+            maximum_slippage_bps
         );
 
         Ok(())
@@ -156,7 +181,6 @@ pub mod position_management_system {
 
             validate_leverage_and_size(position.leverage, size, position.entry_price)?;
 
-            // Calculate new margin (in base units)
             let new_required_margin =
                 calculate_initial_margin(size, position.entry_price, position.leverage)?;
 
@@ -192,7 +216,6 @@ pub mod position_management_system {
                 position.margin += additional_margin;
                 user_account.locked_collateral += additional_margin;
 
-                // Recalculate leverage
                 let position_value = position
                     .size
                     .checked_mul(position.entry_price)
@@ -239,7 +262,8 @@ pub mod position_management_system {
 
         Ok(())
     }
-    pub fn close_position(ctx: Context<ClosePosition>, final_price: u64) -> Result<()> {
+
+    pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
         let position_key = ctx.accounts.position.key();
         let owner_key = ctx.accounts.owner.key();
 
@@ -250,6 +274,18 @@ pub mod position_management_system {
             position.status == PositionStatus::Open,
             PositionError::PositionNotOpen
         );
+
+        // Get current price from Pyth oracle
+        let price_update = &ctx.accounts.price_update;
+        let price = price_update.get_price_no_older_than(
+            &Clock::get()?,
+            MAXIMUM_AGE,
+            &get_feed_id_from_hex(&get_price_feed_id(&position.symbol)?)?,
+        )?;
+
+        let final_price = convert_pyth_price_to_u64(&price)?;
+
+        msg!("Closing position at oracle price: {}", final_price);
 
         let final_pnl = calculate_unrealized_pnl(
             position.size,
@@ -297,10 +333,15 @@ pub mod position_management_system {
             position: position_key,
             owner: owner_key,
             realized_pnl: total_pnl,
+            final_price,
             timestamp: position.last_update,
         });
 
-        msg!("Position closed with PnL: {}", total_pnl);
+        msg!(
+            "Position closed with PnL: {} at price: {}",
+            total_pnl,
+            final_price
+        );
 
         Ok(())
     }
